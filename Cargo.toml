@@ -1,0 +1,11 @@
+[package]
+name = "thunks"
+version = "0.0.1"
+authors = ["Qing Yan <admin@zensh.com>"]
+description = "Asynchronous composer for Rust."
+documentation = "https://iorust.github.io/iorust/thunks"
+homepage = "https://github.com/iorust/thunks"
+repository = "https://github.com/iorust/thunks.git"
+readme = "README.md"
+keywords = ["thunk", "async", "await", "future", "promise"]
+license = "MIT/Apache-2.0"
