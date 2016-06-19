@@ -15,6 +15,14 @@ extern crate thunks;
 use thunks::Thunk;
 ```
 
+```
+pub struct Thunk<T, E>(_)
+```
+
+### impl<T, E> Thunk<T, E> where T: Send + 'static, E: Send + 'static
+#### fn new<F>(task: F) -> Thunk<T, E> where F: Fn(Box<Fn(Result<T, E>) + Send + 'static>) + Send + 'static
+#### fn await(&self) -> Result<T, E>
+
 
 [version-image]: https://img.shields.io/crates/v/thunks.svg
 [version-url]: https://crates.io/crates/thunks
