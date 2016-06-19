@@ -1,6 +1,6 @@
 [package]
 name = "thunks"
-version = "0.0.1"
+version = "0.0.2"
 authors = ["Qing Yan <admin@zensh.com>"]
 description = "Asynchronous composer for Rust."
 documentation = "https://iorust.github.io/iorust/thunks"

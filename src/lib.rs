@@ -4,11 +4,11 @@ use std::sync::{mpsc};
 use std::boxed::{Box};
 // use std::vec::Vec;
 
-pub struct Thunk<T, E>(Box<Fn(&(Fn(Result<T, E>) + Send)) + 'static>);
+pub struct Thunk<T, E>(Box<Fn(&(Fn(Result<T, E>) + 'static + Send)) + 'static>);
 
 impl<T, E> Thunk<T, E> where T: 'static + Sync + Send, E: 'static + Sync + Send {
     pub fn new<F>(task: F) -> Thunk<T, E>
-        where F: Fn(&(Fn(Result<T, E>) + Send)) + 'static
+        where F: Fn(&(Fn(Result<T, E>) + 'static + Send)) + 'static
     {
         Thunk(Box::new(task))
     }
