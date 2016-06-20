@@ -7,7 +7,7 @@
 //! Asynchronous composer for Rust.
 
 // use std::thread;
-use std::sync::{mpsc};
+use std::sync::mpsc::{Receiver, sync_channel};
 use std::boxed::{Box};
 
 pub struct Thunk<T, E>(Box<Fn(Box<Fn(Result<T, E>) + Send + 'static>) + Send + 'static>);
@@ -18,32 +18,53 @@ impl<T, E> Thunk<T, E> where T: Send + 'static, E: Send + 'static {
         Thunk(Box::new(task))
     }
 
-    // pub fn seq(list: Vec<Thunk<T, E>>) -> Thunk<Vec<T>, E> {
-    //     Thunk::new(|cb| {
-    //         let mut res: Vec<T> = Vec::new();
-    //         for t in list {
-    //             match t.await() {
-    //                 Ok(val) => res.push(val),
-    //                 Err(err) => {
-    //                     cb(Err(err));
-    //                     return;
-    //                 }
-    //             }
-    //         }
-    //         cb(Ok(res));
-    //     })
-    // }
-
-    pub fn await(&self) -> Result<T, E> {
-        self.call_thunk()
+    pub fn seq(thunk_vec: Vec<Thunk<T, E>>) -> Thunk<Vec<T>, E> {
+        let thunk_vec = Box::new(thunk_vec);
+        Thunk::new(move |cb| {
+            let mut res: Vec<T> = Vec::new();
+            for thunk in thunk_vec.iter() {
+                match thunk.await() {
+                    Ok(val) => res.push(val),
+                    Err(err) => {
+                        cb(Err(err));
+                        return;
+                    }
+                }
+            }
+            cb(Ok(res));
+        })
     }
 
-    fn call_thunk(&self) -> Result<T, E> {
-        let (tx, rx) = mpsc::sync_channel::<Result<T, E>>(1);
+    pub fn all(thunk_vec: Vec<Thunk<T, E>>) -> Thunk<Vec<T>, E> {
+        let thunk_vec = Box::new(thunk_vec);
+        Thunk::new(move |cb| {
+            let mut res: Vec<T> = Vec::new();
+            let rx_vec: Vec<Receiver<Result<T, E>>> = thunk_vec.iter()
+                .map(|t| t.call_thunk()).collect();
+
+            for rx in rx_vec.iter() {
+                match rx.recv().unwrap() {
+                    Ok(val) => res.push(val),
+                    Err(err) => {
+                        cb(Err(err));
+                        return;
+                    }
+                }
+            }
+            cb(Ok(res));
+        })
+    }
+
+    pub fn await(&self) -> Result<T, E> {
+        self.call_thunk().recv().unwrap()
+    }
+
+    fn call_thunk(&self) -> Receiver<Result<T, E>> {
+        let (tx, rx) = sync_channel::<Result<T, E>>(1);
         (self.0)(Box::new(move |res| {
             tx.try_send(res).unwrap();
         }));
-        rx.recv().unwrap()
+        rx
     }
 }
 
@@ -55,14 +76,66 @@ mod tests {
 
     #[test]
     fn thunk() {
-        let t: Thunk<i32, &str> = Thunk::new(|cb| {
+        let thunk: Thunk<i32, &str> = Thunk::new(|cb| {
             thread::spawn(move || {
                 thread::sleep(Duration::new(3, 0));
                 cb(Ok(1));
             });
         });
-        let res = t.await().unwrap();
+        let res = thunk.await().unwrap();
         // println!("{:?}", res);
         assert_eq!(res, 1);
+    }
+
+    #[test]
+    fn thunk_seq() {
+        let thunk_vec: Vec<Thunk<i32, &str>> = vec![
+            Thunk::new(|cb| {
+                thread::spawn(move || {
+                    thread::sleep(Duration::new(1, 0));
+                    cb(Ok(1));
+                });
+            }),
+            Thunk::new(|cb| {
+                thread::spawn(move || {
+                    thread::sleep(Duration::new(1, 0));
+                    cb(Ok(2));
+                });
+            }),
+            Thunk::new(|cb| {
+                thread::spawn(move || {
+                    thread::sleep(Duration::new(1, 0));
+                    cb(Ok(3));
+                });
+            })
+        ];
+        let res = Thunk::seq(thunk_vec).await().unwrap();
+        assert_eq!(res, vec![1, 2, 3]);
+    }
+
+    #[test]
+    fn thunk_all() {
+        let thunk_vec: Vec<Thunk<i32, &str>> = vec![
+            Thunk::new(|cb| {
+                thread::spawn(move || {
+                    thread::sleep(Duration::new(1, 0));
+                    cb(Ok(1));
+                });
+            }),
+            Thunk::new(|cb| {
+                thread::spawn(move || {
+                    thread::sleep(Duration::new(1, 0));
+                    cb(Ok(2));
+                });
+            }),
+            Thunk::new(|cb| {
+                thread::spawn(move || {
+                    thread::sleep(Duration::new(1, 0));
+                    cb(Ok(3));
+                });
+            })
+        ];
+        let res = Thunk::all(thunk_vec).await().unwrap();
+        assert_eq!(res, vec![1, 2, 3]);
     }
 }
